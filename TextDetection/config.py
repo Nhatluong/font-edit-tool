@@ -1,0 +1,9 @@
+det_algorithm = 'DB'
+use_onnx = True
+det_limit_side_len = 960
+det_limit_type = 'max'
+det_db_thresh = 0.3
+det_db_box_thresh = 0.9
+det_db_unclip_ratio = 2
+use_dilation = False
+det_db_score_mode = "slow"

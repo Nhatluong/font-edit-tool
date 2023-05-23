@@ -1,0 +1,24 @@
+font_dir: 'fonts'
+text_detection_model: 'TextDetection/det_onnx/model.onnx'
+character_recognition_model: 'recog_char/model.onnx'
+mask_segmentation_model: 'SegmentMask/weight/char_model.onnx'
+character_detection_model: 'DetectBox/best_v8m.onnx'
+character_font_dir: '/media/iwanna/01D76E2AA5FFDE50/character_font_group_save'
+character_file: 'all_characters/characters.txt'
+group_font_font: 'group_font_font.pkl'
+font_threshold: 0.6
+similar_percent: 0.9 # phan tram giong voi font giong nhat
+
+# DEBUG
+is_debug: true # true - false
+debug_dir: 'debug_dir'
+
+# Write Data from server
+is_write: false # true - false
+json_texts_web_dir: 'json_texts_web'
+
+# DEVICE
+device: gpu # cpu gpu
+
+# Find Font
+number_thread: 16
