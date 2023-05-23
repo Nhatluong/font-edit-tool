@@ -2,7 +2,7 @@ import os
 import pickle5 as pickle
 import cv2
 import time
-from sewar import uqi_multi
+from sewar import uqi_cython
 import numpy as np
 from multiprocessing import Pool
 
@@ -78,7 +78,7 @@ class FontFinder:
             final_clusters = pickle.load(f)
 
         image = self.standard_image(image)
-        idxs_cluster = uqi_multi(image, centers)
+        idxs_cluster = uqi_cython.uqi_multi(image, centers)
         idx_cluster = np.argmax(idxs_cluster)
         with open(os.path.join(character_dir, f'{idx_cluster}.pkl'), 'rb') as f:
             cluster = pickle.load(f)
@@ -111,12 +111,15 @@ class FontFinder:
                 final_clusters = pickle.load(f)
 
             image = self.standard_image(image)
-            idxs_cluster = uqi_multi(image, centers)
+            image = image.astype(np.float64)
+            centers = centers.astype(np.float64)
+            idxs_cluster = uqi_cython.uqi_multi(memoryview(image), memoryview(centers))
             idx_cluster = np.argmax(idxs_cluster)
             with open(os.path.join(character_dir, f'{idx_cluster}.pkl'), 'rb') as f:
                 cluster = pickle.load(f)
             
-            uqi_values = uqi_multi(image, cluster)
+            cluster = cluster.astype(np.float64)
+            uqi_values = uqi_cython.uqi_multi(memoryview(image), memoryview(cluster))
             idx_max = np.argmax(uqi_values)
             max_value = uqi_values[idx_max]
             final_cluster = final_clusters[idx_cluster]
