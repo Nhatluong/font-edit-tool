@@ -68,94 +68,137 @@ class SegmentMask:
         pred = (pred-mi)/(ma-mi)
         new_w = int(h / 96 * 1248)
         pred = np.squeeze(pred) * 255
-        im_bw = cv2.resize(pred.astype(np.uint8), (new_w, h), interpolation=cv2.INTER_LINEAR)[:, 0: w]
+        if w <= new_w:
+            im_bw = cv2.resize(pred.astype(np.uint8), (new_w, h), interpolation=cv2.INTER_LINEAR)[:, 0: w]
+        else:
+            im_bw = cv2.resize(pred.astype(np.uint8), (w, h), interpolation=cv2.INTER_LINEAR)
         # im_bw = cv2.threshold(im_bw, 90, 255, cv2.THRESH_BINARY)[1]
         return im_bw
     
     def infer_onnx(self, lst_image, lst_wh):
-        lst_np = []
         lst_mask = []
-        all_output = []
+        outname = [i.name for i in self.ort_sess_u2.get_outputs()]
+        inname = [i.name for i in self.ort_sess_u2.get_inputs()]
+        # for i, image in enumerate(lst_image):
+        #     h, w = lst_wh[i]
+        #     tmpImg = self.preprocess(image)
+        #     tmpImg = np.expand_dims(tmpImg, axis=0)
+        #     inp = {inname[0]:np.array(tmpImg, dtype=np.float32)}
+        #     output = self.ort_sess_u2.run(outname, inp)[0]
+        #     im_bw = self.postprocess(output, h, w)
+        #     lst_mask.append(im_bw)
 
-        split = len(lst_image)//10+1
-        cut_len = len(lst_image)//split+1
-        count = 0
-        x_start = 0
-        while count<split:
-            lst_np = []
-            count+=1
-            for img in lst_image[x_start:min(x_start+cut_len, len(lst_image))]:
-                
-                tmpImg = self.preprocess(img)
-
+        max_batch_size = 8
+        outputs = []
+        total_images = len(lst_image)
+        for i, image in enumerate(lst_image):
+            tmpImg = self.preprocess(image)
+            if i % max_batch_size == 0:
+                lst_np = [tmpImg]
+            else:
                 lst_np.append(tmpImg)
+            
+            if i % max_batch_size == max_batch_size - 1 or i == total_images - 1:
+                inp = {inname[0]:np.array(lst_np, dtype=np.float32)}
+                batch_output = self.ort_sess_u2.run(outname, inp)[0]
+                outputs.append(batch_output)
 
-            outname = [i.name for i in self.ort_sess_u2.get_outputs()]
-            inname = [i.name for i in self.ort_sess_u2.get_inputs()]
-            inp = {inname[0]:np.array(lst_np, dtype=np.float32)}
-            output = self.ort_sess_u2.run(outname, inp)[0]
-            x_start = x_start+cut_len
-            for pred in output:
-                all_output.append(pred)
-
-        for i, pred in enumerate(all_output):
-            h, w = lst_wh[i]
-            im_bw = self.postprocess(pred, h, w)
-            lst_mask.append(im_bw)
-
+        idx = 0
+        for batch_output in outputs:
+            for output in batch_output:
+                h, w = lst_wh[idx]
+                im_bw = self.postprocess(output, h, w)
+                lst_mask.append(im_bw) 
+                idx += 1
         return lst_mask
+        
+        # lst_np = []
+        # lst_mask = []
+        # all_output = []
+
+        # split = len(lst_image)//10+1
+        # cut_len = len(lst_image)//split+1
+        # count = 0
+        # x_start = 0
+        # while count<split:
+        #     lst_np = []
+        #     count+=1
+        #     for img in lst_image[x_start:min(x_start+cut_len, len(lst_image))]:
+                
+        #         tmpImg = self.preprocess(img)
+
+        #         lst_np.append(tmpImg)
+
+        #     outname = [i.name for i in self.ort_sess_u2.get_outputs()]
+        #     inname = [i.name for i in self.ort_sess_u2.get_inputs()]
+        #     inp = {inname[0]:np.array(lst_np, dtype=np.float32)}
+        #     output = self.ort_sess_u2.run(outname, inp)[0]
+        #     x_start = x_start+cut_len
+        #     for pred in output:
+        #         all_output.append(pred)
+
+        # for i, pred in enumerate(all_output):
+        #     h, w = lst_wh[i]
+        #     im_bw = self.postprocess(pred, h, w)
+        #     lst_mask.append(im_bw)
+
+        # return lst_mask
 
     def segment_mask(self, img, list_box):
         lst_image = []
         lst_wh = []
         lst_index = []
 
-        lst_mask_concat = []
+        # lst_mask_concat = []
         for c, (x1,y1, x2, y2) in enumerate(list_box):
             lineText = img[y1:y2, x1:x2]
             if lineText.shape[0] == 0 or lineText.shape[1] == 0:
-                lst_mask_concat.append(None)
+                # lst_mask_concat.append(None)
+                continue
             
-            time = 0
-            while True:
-                time+= 1
-                cut_len =  (x2-x1) // time
-                if cut_len / (y2-y1) <= 10:
-                    break
-            
-            n_time = 0
-            while True:
-                n_time += 1
-                if n_time == time:
-                    x11 = x2
-                else:
-                    x11 = x1 + cut_len
+            lst_image.append(lineText)
+            lst_wh.append(lineText.shape[0: 2])
+            lst_index.append(c)
+            # time = 0
+            # while True:
+            #     time+= 1
+            #     cut_len =  (x2-x1) // time
+            #     if cut_len / (y2-y1) <= 10:
+            #         break
+            # n_time = 0
+            # while True:
+            #     n_time += 1
+            #     if n_time == time:
+            #         x11 = x2
+            #     else:
+            #         x11 = x1 + cut_len
                 
-                image = img[y1:y2, x1:x11]
-                x1 = x11
+            #     image = img[y1:y2, x1:x11]
+            #     x1 = x11
 
-                lst_image.append(image)
-                lst_wh.append((image.shape[:2]))
-                lst_index.append(c)
-                if n_time == time:
-                    break
+            #     lst_image.append(image)
+            #     lst_wh.append((image.shape[:2]))
+            #     lst_index.append(c)
+            #     if n_time == time:
+            #         break
 
         if len(lst_image) == 0:
             return None
-
         lst_mask = self.infer_onnx(lst_image, lst_wh)
 
-        for j, index in enumerate(lst_index):
-            if j > 0:
-                if lst_index[j] == lst_index[j-1]:
-                    part1 = mask
-                    part2 = lst_mask[j]
-                    mask = cv2.hconcat([part1, part2])
-                else:
-                    lst_mask_concat.append(mask)
-                    mask = lst_mask[j]
-            else:
-                mask = lst_mask[j]
+        # for j, index in enumerate(lst_index):
+        #     if j > 0:
+        #         if lst_index[j] == lst_index[j-1]:
+        #             part1 = mask
+        #             part2 = lst_mask[j]
+        #             mask = cv2.hconcat([part1, part2])
+        #         else:
+        #             lst_mask_concat.append(mask)
+        #             mask = lst_mask[j]
+        #     else:
+        #         mask = lst_mask[j]
 
-        lst_mask_concat.append(mask)
-        return lst_mask_concat
+        # lst_mask_concat.append(mask)
+
+        # return lst_mask_concat
+        return lst_mask
